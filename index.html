@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTML Live Preview — paste, preview, run</title>
+<style>
+  :root{
+    --bg:#0d1117;
+    --panel:#141a23;
+    --panel2:#1a2230;
+    --border:#232c3b;
+    --text:#e6ebf2;
+    --muted:#8b97a8;
+    --accent:#5b8cff;
+    --green:#39d0a0;
+    --red:#ff6b6b;
+    --amber:#ffb454;
+    --left:50%;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;display:flex;flex-direction:column;
+    background:radial-gradient(1000px 500px at 5% -10%,#1a2440 0%,transparent 55%),var(--bg);
+    color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  [hidden]{display:none!important}
+
+  /* ---------- header ---------- */
+  header{
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:12px 16px;border-bottom:1px solid var(--border);
+    background:rgba(15,20,28,.7);backdrop-filter:blur(8px);
+  }
+  .logo{
+    width:38px;height:38px;flex:none;border-radius:11px;display:grid;place-items:center;
+    background:linear-gradient(135deg,#5b8cff,#39d0a0);color:#0b0f16;
+    font:800 13px/1 ui-monospace,Consolas,monospace;
+    box-shadow:0 6px 18px rgba(91,140,255,.28);
+  }
+  .titles h1{margin:0;font-size:15.5px;letter-spacing:-.01em}
+  .titles p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+  .spacer{flex:1}
+  .toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+
+  button,select{
+    font:inherit;font-size:12.5px;color:var(--muted);background:var(--panel2);
+    border:1px solid var(--border);padding:7px 12px;border-radius:9px;
+    cursor:pointer;transition:.15s;white-space:nowrap;
+  }
+  button:hover,select:hover{color:var(--text);border-color:#3a465c;background:#222c3d}
+  button:active{transform:translateY(1px)}
+  button.primary{
+    background:linear-gradient(135deg,#5b8cff,#4a7bf0);
+    border-color:transparent;color:#fff;font-weight:600;
+    box-shadow:0 4px 14px rgba(91,140,255,.32);
+  }
+  button.primary:hover{filter:brightness(1.08);color:#fff}
+  button.on{background:rgba(57,208,160,.14);border-color:rgba(57,208,160,.45);color:var(--green)}
+  select{padding:7px 9px}
+
+  .run-dot{
+    width:8px;height:8px;border-radius:50%;background:#41506b;flex:none;
+    transition:.25s;box-shadow:0 0 0 0 rgba(57,208,160,.5);
+  }
+  .run-dot.live{background:var(--green);box-shadow:0 0 10px 2px rgba(57,208,160,.55)}
+
+  /* ---------- workspace ---------- */
+  .workspace{
+    flex:1;min-height:0;display:grid;
+    grid-template-columns:var(--left) 9px 1fr;
+  }
+  .pane{
+    display:flex;flex-direction:column;min-height:0;min-width:0;
+    background:var(--panel);border:1px solid var(--border);border-radius:14px;
+    margin:12px;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.28);
+  }
+  .pane.right{margin-left:4px}
+  .pane.left{margin-right:4px}
+
+  .pane-head{
+    display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+    padding:8px 11px;border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg,#1a2130,#151b25);
+  }
+  .tag{
+    font:600 11px/1 ui-monospace,Consolas,monospace;letter-spacing:.06em;
+    color:var(--muted);text-transform:uppercase;
+  }
+  .count{font-size:11.5px;color:#5f6d82;font-variant-numeric:tabular-nums}
+  .head-spacer{flex:1}
+
+  .divider{
+    cursor:col-resize;background:transparent;position:relative;
+  }
+  .divider::after{
+    content:"";position:absolute;inset:0 3px;border-radius:4px;
+    background:var(--border);transition:.15s;
+  }
+  .divider:hover::after,.divider.dragging::after{background:var(--accent)}
+
+  /* ---------- editor ---------- */
+  #code{
+    flex:1;width:100%;min-height:0;resize:none;border:0;outline:0;
+    background:transparent;color:var(--text);padding:14px 16px;
+    font:13px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    tab-size:2;
+  }
+  #code::placeholder{color:#4a566b}
+
+  /* ---------- preview ---------- */
+  .frame-area{
+    flex:1;min-height:0;overflow:auto;background:#0a0d13;
+    display:flex;justify-content:center;align-items:stretch;padding:0;
+  }
+  .frame-area.pad{padding:14px}
+  iframe{
+    flex:1;width:100%;max-width:var(--device,100%);height:100%;
+    border:0;background:#fff;transition:max-width .22s ease;
+  }
+  .frame-area.pad iframe{border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.5);height:100%}
+
+  /* ---------- console ---------- */
+  .console{
+    border-top:1px solid var(--border);background:#101620;
+    height:190px;display:flex;flex-direction:column;min-height:0;
+  }
+  .console-head{
+    display:flex;align-items:center;gap:9px;padding:6px 11px;
+    border-bottom:1px solid var(--border);font-size:11.5px;color:var(--muted);
+  }
+  .badge{
+    font:600 10.5px/1 ui-monospace,monospace;padding:2.5px 6px;border-radius:20px;
+    background:#222c3d;color:var(--muted);
+  }
+  .badge.err{background:rgba(255,107,107,.16);color:var(--red)}
+  .console-body{
+    flex:1;overflow:auto;padding:6px 0;
+    font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  .line{
+    display:flex;gap:9px;padding:3px 12px;border-left:2px solid transparent;
+    white-space:pre-wrap;word-break:break-word;
+  }
+  .line + .line{border-top:1px solid rgba(255,255,255,.03)}
+  .line .t{color:#4c586d;flex:none}
+  .line .m{flex:1;min-width:0}
+  .line.log .m{color:#c8d2e0}
+  .line.info{border-left-color:#3d6fd8}
+  .line.info .m{color:#8fb6ff}
+  .line.warn{border-left-color:var(--amber);background:rgba(255,180,84,.05)}
+  .line.warn .m{color:var(--amber)}
+  .line.error{border-left-color:var(--red);background:rgba(255,107,107,.07)}
+  .line.error .m{color:#ff9d9d}
+  .line.sys .m{color:#5f6d82;font-style:italic}
+  .empty{padding:14px 12px;color:#4c586d;font-size:12.5px}
+
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#2b3547;border-radius:8px;border:2px solid transparent;background-clip:content-box}
+  ::-webkit-scrollbar-thumb:hover{background:#3a465c;background-clip:content-box}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  .toast{
+    position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);
+    background:#222c3d;border:1px solid #3a465c;color:var(--text);
+    padding:9px 16px;border-radius:10px;font-size:13px;
+    opacity:0;pointer-events:none;transition:.25s;z-index:99;
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  /* ---------- responsive ---------- */
+  @media (max-width:860px){
+    .workspace{grid-template-columns:1fr;grid-auto-rows:minmax(260px,auto);overflow:auto}
+    .divider{display:none}
+    .pane{margin:10px}
+    .pane.right{margin-left:10px}
+    .pane.left{height:42vh}
+    .pane.right{height:auto}
+    .frame-area{min-height:320px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">&lt;/&gt;</div>
+  <div class="titles">
+    <h1>HTML Live Preview</h1>
+    <p>Paste HTML — it renders and runs instantly, console included.</p>
+  </div>
+  <div class="spacer"></div>
+  <div class="toolbar">
+    <span class="run-dot" id="dot" title="Idle"></span>
+    <button id="btnAuto" class="on" title="Re-run automatically while typing">Auto-run: ON</button>
+    <button id="btnRun" class="primary" title="Ctrl / Cmd + Enter">▶ Run</button>
+    <select id="device" title="Preview width">
+      <option value="0">Full width</option>
+      <option value="1440">1440px</option>
+      <option value="1024">1024px</option>
+      <option value="768">768px</option>
+      <option value="390">390px — phone</option>
+    </select>
+    <button id="btnSample">Sample</button>
+    <button id="btnClear">Clear</button>
+    <button id="btnCopy">Copy</button>
+    <button id="btnDownload">Download</button>
+    <button id="btnOpen">Open ↗</button>
+  </div>
+</header>
+
+<div class="workspace" id="workspace">
+
+  <!-- EDITOR -->
+  <section class="pane left">
+    <div class="pane-head">
+      <span class="tag">HTML source</span>
+      <span class="count" id="inCount">0 chars</span>
+      <span class="head-spacer"></span>
+      <span class="count" id="hint">Ctrl/⌘ + Enter to run</span>
+    </div>
+    <textarea id="code" spellcheck="false" autocomplete="off" autocapitalize="off"
+      placeholder="Paste your HTML code here…&#10;&#10;Example:&#10;<h1>Hello</h1>&#10;<button onclick=&quot;alert('hi')&quot;>Click me</button>"></textarea>
+  </section>
+
+  <div class="divider" id="divider"></div>
+
+  <!-- PREVIEW -->
+  <section class="pane right">
+    <div class="pane-head">
+      <span class="tag">Live preview</span>
+      <span class="count" id="outCount">—</span>
+      <span class="head-spacer"></span>
+      <button id="btnConsole" class="on">Console</button>
+      <button id="btnStorage" title="Give the preview localStorage / cookies access">Storage: OFF</button>
+    </div>
+
+    <div class="frame-area" id="frameArea">
+      <iframe id="preview"
+        sandbox="allow-scripts allow-modals allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
+        title="Rendered HTML preview"></iframe>
+    </div>
+
+    <div class="console" id="console">
+      <div class="console-head">
+        <span class="tag" style="font-size:10.5px">Console</span>
+        <span class="badge" id="logCount">0</span>
+        <span class="badge err" id="errCount" hidden>0 errors</span>
+        <span class="head-spacer" style="flex:1"></span>
+        <button id="btnClearConsole" style="padding:3px 9px;font-size:11.5px">Clear</button>
+      </div>
+      <div class="console-body" id="consoleBody">
+        <div class="empty">Console output from the preview appears here…</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================================================================
+   Elements
+   =================================================================== */
+const codeEl      = document.getElementById('code');
+const preview     = document.getElementById('preview');
+const frameArea   = document.getElementById('frameArea');
+const inCount     = document.getElementById('inCount');
+const outCount    = document.getElementById('outCount');
+const dot         = document.getElementById('dot');
+const consoleBody = document.getElementById('consoleBody');
+const consoleEl   = document.getElementById('console');
+const logCountEl  = document.getElementById('logCount');
+const errCountEl  = document.getElementById('errCount');
+const btnAuto     = document.getElementById('btnAuto');
+const btnConsole  = document.getElementById('btnConsole');
+const btnStorage  = document.getElementById('btnStorage');
+const toastEl     = document.getElementById('toast');
+const divider     = document.getElementById('divider');
+const workspace   = document.getElementById('workspace');
+
+/* ===================================================================
+   State
+   =================================================================== */
+let autoRun   = true;
+let useStorage = false;
+let runId     = 0;
+let typingTimer = null;
+let logTotal = 0, errTotal = 0;
+
+/* ===================================================================
+   Console bridge — injected at the top of <head> so it runs first
+   and can capture everything the user's code logs or throws.
+   =================================================================== */
+const BRIDGE = '<script>(function(){' +
+  'function fmt(v){' +
+    'try{' +
+      'if(typeof v==="string")return v;' +
+      'if(v instanceof Error)return (v.stack||v.name+": "+v.message);' +
+      'if(v===undefined)return "undefined";' +
+      'if(typeof v==="function")return v.toString();' +
+      'if(typeof v==="object")return JSON.stringify(v,null,1);' +
+      'return String(v);' +
+    '}catch(e){return String(v);}' +
+  '}' +
+  'function send(level,args){' +
+    'try{parent.postMessage({__hp:true,level:level,args:Array.prototype.map.call(args,fmt)},"*");}catch(e){}' +
+  '}' +
+  '["log","info","warn","error","debug"].forEach(function(m){' +
+    'var orig=console[m];' +
+    'console[m]=function(){send(m,arguments);if(orig)try{orig.apply(console,arguments);}catch(e){}};' +
+  '});' +
+  'window.addEventListener("error",function(e){' +
+    'send("error",[(e.message||"Script error")+(e.lineno?"  (line "+e.lineno+")":"")]);' +
+  '});' +
+  'window.addEventListener("unhandledrejection",function(e){' +
+    'send("error",["Unhandled promise rejection: "+fmt(e.reason)]);' +
+  '});' +
+  'send("sys",["Preview loaded ✓"]);' +
+'})();<\/script>';
+
+/* Insert the bridge as early as possible inside the document. */
+function injectBridge(html){
+  const head = html.match(/<head[^>]*>/i);
+  if (head) {
+    const i = head.index + head[0].length;
+    return html.slice(0, i) + BRIDGE + html.slice(i);
+  }
+  const htmlTag = html.match(/<html[^>]*>/i);
+  if (htmlTag) {
+    const i = htmlTag.index + htmlTag[0].length;
+    return html.slice(0, i) + BRIDGE + html.slice(i);
+  }
+  const doctype = html.match(/<!doctype[^>]*>/i);
+  if (doctype) {
+    const i = doctype.index + doctype[0].length;
+    return html.slice(0, i) + BRIDGE + html.slice(i);
+  }
+  return BRIDGE + html;
+}
+
+const EMPTY_DOC =
+  '<!DOCTYPE html><html><body style="margin:0;height:100vh;display:grid;' +
+  'place-items:center;font:14px system-ui;color:#8b97a8;background:#fff">' +
+  'Paste HTML on the left to see it here</body></html>';
+
+/* ===================================================================
+   Run
+   =================================================================== */
+function run(){
+  const src = codeEl.value;
+  clearConsole(true);
+  logTotal = 0; errTotal = 0; updateCounts();
+
+  dot.classList.add('live');
+  setTimeout(() => dot.classList.remove('live'), 650);
+
+  outCount.textContent = src.trim() ? src.length.toLocaleString() + ' chars' : 'empty';
+
+  if (!src.trim()){
+    preview.srcdoc = EMPTY_DOC;
+    return;
+  }
+  // unique suffix forces a reload even when the code is unchanged
+  preview.srcdoc = injectBridge(src) + '\n<!--run:' + (++runId) + '-->';
+}
+
+/* ===================================================================
+   Console UI
+   =================================================================== */
+function clearConsole(keepEmptyMsg){
+  consoleBody.innerHTML = keepEmptyMsg
+    ? '<div class="empty">Console output from the preview appears here…</div>'
+    : '';
+  logTotal = 0; errTotal = 0; updateCounts();
+}
+
+function updateCounts(){
+  logCountEl.textContent = logTotal + (logTotal === 1 ? ' msg' : ' msgs');
+  if (errTotal > 0){
+    errCountEl.hidden = false;
+    errCountEl.textContent = errTotal + (errTotal === 1 ? ' error' : ' errors');
+  } else {
+    errCountEl.hidden = true;
+  }
+}
+
+function stamp(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0') + ':' +
+         String(d.getMinutes()).padStart(2,'0') + ':' +
+         String(d.getSeconds()).padStart(2,'0');
+}
+
+function addLine(level, text){
+  const empty = consoleBody.querySelector('.empty');
+  if (empty) empty.remove();
+
+  const cls = level === 'sys' ? 'sys' : level;
+  const row = document.createElement('div');
+  row.className = 'line ' + cls;
+
+  const t = document.createElement('span');
+  t.className = 't';
+  t.textContent = stamp();
+
+  const m = document.createElement('span');
+  m.className = 'm';
+  m.textContent = text;      // textContent → never executes injected markup
+
+  row.append(t, m);
+  consoleBody.appendChild(row);
+  consoleBody.scrollTop = consoleBody.scrollHeight;
+
+  if (level === 'error') errTotal++;
+  logTotal++;
+  updateCounts();
+}
+
+/* ===================================================================
+   Receive messages from the preview
+   =================================================================== */
+window.addEventListener('message', e => {
+  if (e.source !== preview.contentWindow) return;   // only our iframe
+  const d = e.data;
+  if (!d || d.__hp !== true) return;
+  addLine(d.level || 'log', (d.args || []).join('  '));
+});
+
+/* ===================================================================
+   Input handling
+   =================================================================== */
+codeEl.addEventListener('input', () => {
+  const v = codeEl.value;
+  inCount.textContent = v.length.toLocaleString() + ' chars · ' +
+                        v.split('\n').length.toLocaleString() + ' lines';
+  if (!autoRun) return;
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(run, 420);
+});
+
+/* Tab key inserts two spaces instead of leaving the field */
+codeEl.addEventListener('keydown', e => {
+  if (e.key === 'Tab'){
+    e.preventDefault();
+    const s = codeEl.selectionStart, en = codeEl.selectionEnd;
+    codeEl.value = codeEl.value.slice(0, s) + '  ' + codeEl.value.slice(en);
+    codeEl.selectionStart = codeEl.selectionEnd = s + 2;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter'){
+    e.preventDefault();
+    run();
+  }
+});
+
+/* ===================================================================
+   Toolbar
+   =================================================================== */
+document.getElementById('btnRun').addEventListener('click', run);
+
+btnAuto.addEventListener('click', () => {
+  autoRun = !autoRun;
+  btnAuto.classList.toggle('on', autoRun);
+  btnAuto.textContent = 'Auto-run: ' + (autoRun ? 'ON' : 'OFF');
+  if (autoRun) run();
+});
+
+document.getElementById('btnClear').addEventListener('click', () => {
+  codeEl.value = '';
+  codeEl.dispatchEvent(new Event('input'));
+  codeEl.focus();
+});
+
+document.getElementById('btnSample').addEventListener('click', () => {
+  codeEl.value = SAMPLE;
+  codeEl.dispatchEvent(new Event('input'));
+  run();
+});
+
+document.getElementById('btnCopy').addEventListener('click', () => {
+  navigator.clipboard.writeText(codeEl.value)
+    .then(() => toast('HTML copied to clipboard'))
+    .catch(() => { codeEl.select(); document.execCommand('copy'); toast('Copied'); });
+});
+
+document.getElementById('btnDownload').addEventListener('click', () => {
+  const blob = new Blob([codeEl.value], { type:'text/html;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'preview.html';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast('Downloaded preview.html');
+});
+
+document.getElementById('btnOpen').addEventListener('click', () => {
+  const w = window.open('', '_blank');
+  if (!w) { toast('Pop-up blocked — allow pop-ups to use this'); return; }
+  w.document.open();
+  w.document.write(codeEl.value || EMPTY_DOC);
+  w.document.close();
+});
+
+/* console panel toggle */
+btnConsole.addEventListener('click', () => {
+  const hidden = consoleEl.hidden;
+  consoleEl.hidden = !hidden;
+  btnConsole.classList.toggle('on', hidden);
+});
+
+document.getElementById('btnClearConsole').addEventListener('click', () => {
+  clearConsole(true);
+  logTotal = 0; errTotal = 0; updateCounts();
+});
+
+/* storage permission toggle → re-render with allow-same-origin */
+btnStorage.addEventListener('click', () => {
+  useStorage = !useStorage;
+  btnStorage.classList.toggle('on', useStorage);
+  btnStorage.textContent = 'Storage: ' + (useStorage ? 'ON' : 'OFF');
+
+  let sb = 'allow-scripts allow-modals allow-forms allow-popups ' +
+           'allow-popups-to-escape-sandbox allow-downloads';
+  if (useStorage) sb += ' allow-same-origin';
+  preview.setAttribute('sandbox', sb);
+
+  toast(useStorage ? 'Storage access enabled' : 'Storage access disabled');
+  run();
+});
+
+/* device width */
+document.getElementById('device').addEventListener('change', e => {
+  const w = parseInt(e.target.value, 10);
+  if (!w){
+    frameArea.style.setProperty('--device', '100%');
+    frameArea.classList.remove('pad');
+  } else {
+    frameArea.style.setProperty('--device', w + 'px');
+    frameArea.classList.add('pad');
+  }
+});
+
+/* ===================================================================
+   Draggable splitter
+   =================================================================== */
+(function enableDrag(){
+  let dragging = false;
+
+  const start = () => { dragging = true; divider.classList.add('dragging'); document.body.style.userSelect = 'none'; };
+  const stop  = () => { dragging = false; divider.classList.remove('dragging'); document.body.style.userSelect = ''; };
+
+  divider.addEventListener('mousedown', e => { e.preventDefault(); start(); });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const r = workspace.getBoundingClientRect();
+    let pct = ((e.clientX - r.left) / r.width) * 100;
+    pct = Math.min(85, Math.max(15, pct));
+    workspace.style.setProperty('--left', pct + '%');
+  });
+  window.addEventListener('mouseup', stop);
+
+  /* touch */
+  divider.addEventListener('touchstart', e => { start(); }, { passive:true });
+  window.addEventListener('touchmove', e => {
+    if (!dragging || !e.touches[0]) return;
+    const r = workspace.getBoundingClientRect();
+    let pct = ((e.touches[0].clientX - r.left) / r.width) * 100;
+    pct = Math.min(85, Math.max(15, pct));
+    workspace.style.setProperty('--left', pct + '%');
+  }, { passive:true });
+  window.addEventListener('touchend', stop);
+})();
+
+/* ===================================================================
+   Toast
+   =================================================================== */
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastEl._t);
+  toastEl._t = setTimeout(() => toastEl.classList.remove('show'), 1500);
+}
+
+/* ===================================================================
+   Sample code (shows off rendering + JS + console)
+   =================================================================== */
+const SAMPLE = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Demo</title>
+<style>
+  body{font-family:system-ui,sans-serif;margin:0;padding:28px;
+       background:linear-gradient(135deg,#eef3ff,#f7fbff);color:#1b2430}
+  h1{margin:0 0 6px;font-size:24px}
+  .card{background:#fff;border-radius:14px;padding:20px 22px;
+        box-shadow:0 10px 30px rgba(30,60,120,.12);max-width:460px}
+  button{font:inherit;padding:9px 15px;border-radius:9px;border:0;
+         background:#5b8cff;color:#fff;cursor:pointer;font-weight:600}
+  button:active{transform:translateY(1px)}
+  ul{padding-left:20px;margin:14px 0 0}
+  code{background:#eef2f9;padding:2px 5px;border-radius:5px;font-size:13px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Hello, world 👋</h1>
+    <p>This page is rendered <strong>and running</strong> inside the preview.</p>
+    <button id="go">Click me</button>
+    <ul id="list"></ul>
+  </div>
+
+  <script>
+    console.log('Script booted at', new Date().toLocaleTimeString());
+
+    var n = 0;
+    document.getElementById('go').addEventListener('click', function(){
+      n++;
+      var li = document.createElement('li');
+      li.innerHTML = 'Clicked <code>' + n + '</code> time' + (n>1?'s':'');
+      document.getElementById('list').appendChild(li);
+      console.log('Button clicked', n);
+    });
+
+    // Example warning + error so you can see the console styling
+    console.warn('This is a warning message');
+    setTimeout(function(){ notDefinedFunction(); }, 700);
+  <\/script>
+</body>
+</html>`;
+
+/* ===================================================================
+   Boot
+   =================================================================== */
+codeEl.value = SAMPLE;
+codeEl.dispatchEvent(new Event('input'));
+run();
+codeEl.focus();
+</script>
+</body>
+</html>
